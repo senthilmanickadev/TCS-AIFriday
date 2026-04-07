@@ -12,7 +12,7 @@ users = {
     "reviewer": {"password": "456", "role": "Reviewer"}
 }
 
-# --- Database Setup (Week 2) ---
+# --- Database Setup ---
 def init_db():
     conn = sqlite3.connect("requirements.db")
     c = conn.cursor()
@@ -38,7 +38,7 @@ def init_db():
 
 init_db()
 
-# --- Login Page (Week 1) ---
+# --- Login Page ---
 @app.route("/", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -67,7 +67,7 @@ def dashboard():
         return f"Welcome, {session['role']}! <br><a href='/input'>Add Requirement</a> | <a href='/list'>View Requirements</a>"
     return redirect(url_for("login"))
 
-# --- Requirement Input (Week 2) ---
+# --- Requirement Input ---
 @app.route("/input", methods=["GET", "POST"])
 def input_requirement():
     if request.method == "POST":
@@ -102,26 +102,36 @@ def list_requirements():
     output = "<h2>Saved Requirements</h2><ul>"
     for r in rows:
         output += f"<li><b>{r[1]}</b>: {r[2]} "
-        output += f"<a href='/expand/{r[0]}'>[Expand with AI]</a> "
+        output += f"<a href='/expand/{r[0]}'>[Expand with AI1]</a> "
+        output += f"<a href='/expand2/{r[0]}'>[Expand with AI2]</a> "
         output += f"<a href='/review/{r[0]}'>[Review]</a> "
         output += f"<a href='/edit/{r[0]}'>[Edit]</a></li>"
     output += "</ul><a href='/input'>Add New Requirement</a>"
     return output
 
-# --- AI Expansion (Week 3) ---
+# --- AI Expansion (AI1 + AI2) ---
 openai.api_key = "YOUR_OPENAI_KEY"  # Replace with your actual key
 
-def expand_requirement(raw_text):
+def expand_requirement_ai1(raw_text):
     prompt = f"Expand this requirement into detailed functional and non-functional specifications:\n\n{raw_text}"
     response = openai.Completion.create(
-        engine="text-davinci-003",  # or gpt-4 if available
+        engine="text-davinci-003",
+        prompt=prompt,
+        max_tokens=500
+    )
+    return response.choices[0].text.strip()
+
+def expand_requirement_ai2(raw_text):
+    prompt = f"Review this requirement and suggest improvements, risks, and missing details:\n\n{raw_text}"
+    response = openai.Completion.create(
+        engine="text-davinci-003",
         prompt=prompt,
         max_tokens=500
     )
     return response.choices[0].text.strip()
 
 @app.route("/expand/<int:req_id>")
-def expand(req_id):
+def expand_ai1(req_id):
     conn = sqlite3.connect("requirements.db")
     c = conn.cursor()
     c.execute("SELECT raw_text FROM requirements WHERE id=?", (req_id,))
@@ -130,9 +140,8 @@ def expand(req_id):
 
     if row:
         raw_text = row[0]
-        expanded = expand_requirement(raw_text)
+        expanded = expand_requirement_ai1(raw_text)
 
-        # Save AI expansion into reviews table
         conn = sqlite3.connect("requirements.db")
         c = conn.cursor()
         c.execute("INSERT INTO reviews (requirement_id, reviewer_type, comments) VALUES (?, ?, ?)",
@@ -140,11 +149,34 @@ def expand(req_id):
         conn.commit()
         conn.close()
 
-        return f"<h2>AI Expansion</h2><pre>{expanded}</pre><br><a href='/list'>Back to Requirements</a>"
+        return f"<h2>AI1 Expansion</h2><pre>{expanded}</pre><br><a href='/list'>Back to Requirements</a>"
     else:
         return "Requirement not found"
 
-# --- Reviewer Dashboard (Week 4) ---
+@app.route("/expand2/<int:req_id>")
+def expand_ai2(req_id):
+    conn = sqlite3.connect("requirements.db")
+    c = conn.cursor()
+    c.execute("SELECT raw_text FROM requirements WHERE id=?", (req_id,))
+    row = c.fetchone()
+    conn.close()
+
+    if row:
+        raw_text = row[0]
+        expanded = expand_requirement_ai2(raw_text)
+
+        conn = sqlite3.connect("requirements.db")
+        c = conn.cursor()
+        c.execute("INSERT INTO reviews (requirement_id, reviewer_type, comments) VALUES (?, ?, ?)",
+                  (req_id, "AI2", expanded))
+        conn.commit()
+        conn.close()
+
+        return f"<h2>AI2 Review</h2><pre>{expanded}</pre><br><a href='/list'>Back to Requirements</a>"
+    else:
+        return "Requirement not found"
+
+# --- Reviewer Dashboard (Human Review) ---
 @app.route("/review/<int:req_id>", methods=["GET", "POST"])
 def review_requirement(req_id):
     conn = sqlite3.connect("requirements.db")
